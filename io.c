@@ -21,7 +21,22 @@ struct buffer;
 #define cq_entry(entry_id) cq->cq[CQ_ENTRY_TO_PAGE_NUM(entry_id)][CQ_ENTRY_TO_PAGE_OFFSET(entry_id)]
 
 extern bool io_using_dma;
+extern struct nvmev_dev *nvmev_vdev;
+int pe_cycle = 0;
+static int threshold_test = 10;
 
+void set_pe_cycle(int cycle)
+{
+	pe_cycle = cycle;
+}
+
+static inline int cal_num_read_retry(void)
+{
+	if(pe_cycle > threshold_test)
+		return 1;
+	else
+		return 0;
+}
 static inline unsigned int __get_io_worker(int sqid)
 {
 #ifdef CONFIG_NVMEV_IO_WORKER_BY_SQ
@@ -93,6 +108,7 @@ static unsigned int __do_perform_io(int sqid, int sq_entry)
 
 		if (cmd->opcode == nvme_cmd_write ||
 		    cmd->opcode == nvme_cmd_zone_append) {
+			pe_cycle += 1;
 			memcpy(nvmev_vdev->ns[nsid].mapped + offset, vaddr + mem_offs, io_size);
 		} else if (cmd->opcode == nvme_cmd_read) {
 			memcpy(vaddr + mem_offs, nvmev_vdev->ns[nsid].mapped + offset, io_size);
@@ -197,6 +213,7 @@ static unsigned int __do_perform_io_using_dma(int sqid, int sq_entry)
 
 		if (cmd->opcode == nvme_cmd_write ||
 		    cmd->opcode == nvme_cmd_zone_append) {
+			pe_cycle += 1;
 			ioat_dma_submit(paddr, nvmev_vdev->config.storage_start + offset, io_size);
 		} else if (cmd->opcode == nvme_cmd_read) {
 			ioat_dma_submit(nvmev_vdev->config.storage_start + offset, paddr, io_size);
@@ -561,6 +578,10 @@ static int nvmev_io_worker(void *data)
 	struct nvmev_io_worker *worker = (struct nvmev_io_worker *)data;
 	struct nvmev_ns *ns;
 	static unsigned long last_io_time = 0;
+	int num_read_retry;
+	struct nvmev_config *cfg;
+	struct nvme_rw_command *cmd;
+	struct nvmev_submission_queue *sq;
 
 #ifdef PERF_DEBUG
 	static unsigned long long intr_clock[NR_MAX_IO_QUEUE + 1];
@@ -622,6 +643,19 @@ static int nvmev_io_worker(void *data)
 
 				NVMEV_DEBUG_VERBOSE("%s: copied %u, %d %d %d\n", worker->thread_name, curr,
 					    w->sqid, w->cqid, w->sq_entry);
+				//JW start
+				num_read_retry = cal_num_read_retry();
+				sq = nvmev_vdev->sqes[w->sqid];
+				cmd = &sq_entry(w->sq_entry).rw;
+				if(num_read_retry > 0 && cmd->opcode == nvme_cmd_read) // Read retry
+				{
+					NVMEV_INFO("%s: read retry for %d times\n", worker->thread_name, num_read_retry);
+					cfg = &nvmev_vdev->config;
+					w->nsecs_target += cfg->read_delay;
+					w->nsecs_target += cfg->read_time;
+					w->nsecs_target += cfg->read_trailing;
+				}
+				//JW end
 			}
 
 			if (w->nsecs_target <= curr_nsecs) {
