@@ -71,6 +71,11 @@ static unsigned int nr_io_units = 8;
 static unsigned int io_unit_shift = 12;
 
 static char *cpus;
+
+static unsigned int retention = 0;
+static unsigned int ecc = 0;
+static unsigned int uber_threshold = 0;
+
 static unsigned int debug = 0;
 
 int io_using_dma = false;
@@ -109,6 +114,12 @@ module_param(io_unit_shift, uint, 0444);
 MODULE_PARM_DESC(io_unit_shift, "Size of each I/O unit (2^)");
 module_param(cpus, charp, 0444);
 MODULE_PARM_DESC(cpus, "CPU list for process, completion(int.) threads, Seperated by Comma(,)");
+module_param(retention, uint, 0444);
+MODULE_PARM_DESC(retention, "Device retention state (0:1day -default-, 1:3day, 2:3week, 3:3month, 4:1year, 5:3year)");
+module_param(ecc, uint, 0444);
+MODULE_PARM_DESC(ecc, "Ecc algorithm (0:BCH -default-, 1:LDPC)");
+module_param(uber_threshold, uint, 0444);
+MODULE_PARM_DESC(uber_threshold, "UBER threshold (0:10^-16 -default-, 1:10^-9)");
 module_param(debug, uint, 0644);
 
 // Returns true if an event is processed
@@ -510,6 +521,10 @@ static bool __load_configs(struct nvmev_config *config)
 		}
 		first = false;
 	}
+
+    config->retention = retention;
+    config->ecc = ecc;
+    config->uber_threshold = uber_threshold;
 
 	return true;
 }

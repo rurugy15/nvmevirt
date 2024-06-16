@@ -165,6 +165,10 @@ struct nvmev_config {
 	unsigned int write_delay; // ns
 	unsigned int write_time; // ns
 	unsigned int write_trailing; // ns
+
+	unsigned int retention; // for ReadRetry
+	unsigned int ecc; // for ReadRetry
+	unsigned int uber_threshold; // for ReadRetry
 };
 
 struct nvmev_io_work {
