@@ -254,4 +254,47 @@ static_assert(NR_NAMESPACES <= 2);
 #define SUPPORTED_SSD_TYPE(type) \
 	(NS_SSD_TYPE_0 == SSD_TYPE_##type || NS_SSD_TYPE_1 == SSD_TYPE_##type)
 
+/* For Read Retry */
+#define PE_CYCLE_NUM 10
+
+typedef enum
+{
+    RETENTION_1DAY = 0,
+    RETENTION_3DAY,
+    RETENTION_3WEEK,
+    RETENTION_3MONTH,
+    RETENTION_1YEAR,
+    RETENTION_3YEAR,
+    RETENTION_STATE_NUM
+} retention_state;
+
+typedef enum
+{
+    ECC_BCH = 0,
+    ECC_LDPC = 1,
+    ECC_ALGORITHM_NUM
+} ecc_algorithm;
+
+typedef enum
+{
+    UBER_E16 = 0, // 10^(-16)
+    UBER_E09 = 1, // 10^(-9)
+    UBER_THRESHOLD_NUM
+} uber_threshold_type;
+
+static const unsigned int pe_cycle_tbl[PE_CYCLE_NUM] = {\
+    0,100,1500,3000,6000,12000,24000,50000,100000,300000,};
+
+static const double rber_tbl[RETENTION_STATE_NUM][PE_CYCLE_NUM] = {\
+    {0,6.310E-8,7.943E-8,1.995E-7,4.365E-7,1.122E-6,2.239E-6,3.162E-6,1.585E-5,1.288E-4,},\
+    {0,9.333E-8,1.259E-7,3.981E-7,1.175E-6,2.138E-6,4.169E-6,2.630E-5,6.607E-5,5.495E-4,},\
+    {0,1.778E-7,3.311E-7,2.570E-6,1.660E-5,5.623E-5,1.905E-4,4.266E-4,3.162E-3,1.230E-2,},\
+    {0,2.512E-7,1.047E-6,8.128E-6,8.710E-5,5.248E-4,1.479E-3,2.951E-3,1.000E-2,4.898E-2,},\
+    {0,3.890E-7,3.388E-6,3.236E-5,1.660E-4,8.913E-4,2.344E-3,9.333E-3,2.692E-2,1.023E-1,},\
+    {0,6.607E-7,3.162E-5,1.047E-4,5.888E-4,3.162E-3,7.413E-3,2.692E-2,1.000E-1,2.455E-1,}};
+
+static const double correctable_rber[ECC_ALGORITHM_NUM][UBER_THRESHOLD_NUM] = {\
+    {1.000E-3, 1.645E-3},\
+    {5.000E-3, 6.434E-3}};
+
 #endif

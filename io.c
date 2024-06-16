@@ -22,13 +22,15 @@ struct buffer;
 
 extern bool io_using_dma;
 extern struct nvmev_dev *nvmev_vdev;
-int pe_cycle = 0;
+static int pe_cycle = 0;
 static int threshold_test = 10;
 
+#if 0
 void set_pe_cycle(int cycle)
 {
 	pe_cycle = cycle;
 }
+#endif
 
 static inline int cal_num_read_retry(void)
 {
@@ -37,6 +39,43 @@ static inline int cal_num_read_retry(void)
 	else
 		return 0;
 }
+
+static inline bool is_correctable(const double rber)
+{
+    ecc_algorithm ecc = (ecc_algorithm)nvmev_vdev->config.ecc;
+    uber_threshold_type uber = (uber_threshold_type)nvmev_vdev->config.uber_threshold;
+    return rber <= correctable_rber[ecc][uber];
+}
+
+static double get_rber(void) //in: static int pe_cycle, out: double rber
+{
+    retention_state retention = (retention_state)nvmev_vdev->config.retention;
+
+    if (pe_cycle <= 0)
+        return 0; //lower bound
+    if (pe_cycle >= pe_cycle_tbl[PE_CYCLE_NUM - 1])
+        return rber_tbl[retention][PE_CYCLE_NUM - 1]; //upper bound
+
+    int start_i;
+    int end_i;
+    for (int i = 1; i < PE_CYCLE_NUM; ++i)
+    {
+        if (pe_cycle < pe_cycle_tbl[i])
+        {
+            start_i = i - 1;
+            end_i = i;
+            break;
+        }
+    }
+
+    double dx = pe_cycle_tbl[end_i] - pe_cycle_tbl[start_i];
+    double dy = rber_tbl[retention][end_i] - rber_tbl[retention][start_i];
+    double dydx = dy / dx;
+    double rber = dydx * (pe_cycle - pe_cycle_tbl[start_i]) + rber_tbl[retention][start_i];
+
+    return rber;
+}
+
 static inline unsigned int __get_io_worker(int sqid)
 {
 #ifdef CONFIG_NVMEV_IO_WORKER_BY_SQ
