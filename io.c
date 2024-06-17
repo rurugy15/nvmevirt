@@ -40,21 +40,27 @@ static inline int cal_num_read_retry(void)
 		return 0;
 }
 
-static inline bool is_correctable(const double rber)
+static inline bool is_read_retry_stop(const uint64_t rbe)
+{
+    return rbe < read_retry_stop_rbe; // true: stop, false: continue read retry
+}
+
+static bool is_correctable(const uint64_t rbe)
 {
     ecc_algorithm ecc = (ecc_algorithm)nvmev_vdev->config.ecc;
     uber_threshold_type uber = (uber_threshold_type)nvmev_vdev->config.uber_threshold;
-    return rber <= correctable_rber[ecc][uber];
+    uint64_t correctable_rbe_per_page = correctable_rbe[ecc][uber];
+    return rbe <= correctable_rbe_per_page;
 }
 
-static double get_rber(void) //in: static int pe_cycle, out: double rber
+static uint64_t get_rbe(void) //in: static int pe_cycle
 {
     retention_state retention = (retention_state)nvmev_vdev->config.retention;
 
     if (pe_cycle <= 0)
         return 0; //lower bound
     if (pe_cycle >= pe_cycle_tbl[PE_CYCLE_NUM - 1])
-        return rber_tbl[retention][PE_CYCLE_NUM - 1]; //upper bound
+        return rbe_tbl[retention][PE_CYCLE_NUM - 1]; //upper bound
 
     int start_i;
     int end_i;
@@ -68,12 +74,12 @@ static double get_rber(void) //in: static int pe_cycle, out: double rber
         }
     }
 
-    double dx = pe_cycle_tbl[end_i] - pe_cycle_tbl[start_i];
-    double dy = rber_tbl[retention][end_i] - rber_tbl[retention][start_i];
-    double dydx = dy / dx;
-    double rber = dydx * (pe_cycle - pe_cycle_tbl[start_i]) + rber_tbl[retention][start_i];
+    uint64_t dx = pe_cycle_tbl[end_i] - pe_cycle_tbl[start_i];
+    uint64_t dy = rbe_tbl[retention][end_i] - rbe_tbl[retention][start_i];
+    uint64_t dydx = dy / dx;
+    uint64_t rbe = dydx * (pe_cycle - pe_cycle_tbl[start_i]) + rbe_tbl[retention][start_i];
 
-    return rber;
+    return rbe;
 }
 
 static inline unsigned int __get_io_worker(int sqid)
