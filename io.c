@@ -32,19 +32,6 @@ void set_pe_cycle(int cycle)
 }
 #endif
 
-static inline int cal_num_read_retry(void)
-{
-	if(pe_cycle > threshold_test)
-		return 1;
-	else
-		return 0;
-}
-
-static inline bool is_read_retry_stop(const uint64_t rbe)
-{
-    return rbe < read_retry_stop_rbe; // true: stop, false: continue read retry
-}
-
 static bool is_correctable(const uint64_t rbe)
 {
     ecc_algorithm ecc = (ecc_algorithm)nvmev_vdev->config.ecc;
@@ -52,6 +39,7 @@ static bool is_correctable(const uint64_t rbe)
     uint64_t correctable_rbe_per_page = correctable_rbe[ecc][uber];
     return rbe <= correctable_rbe_per_page;
 }
+
 
 static uint64_t get_rbe(void) //in: static int pe_cycle
 {
@@ -64,7 +52,8 @@ static uint64_t get_rbe(void) //in: static int pe_cycle
 
     int start_i;
     int end_i;
-    for (int i = 1; i < PE_CYCLE_NUM; ++i)
+	int i;
+    for (i = 1; i < PE_CYCLE_NUM; ++i)
     {
         if (pe_cycle < pe_cycle_tbl[i])
         {
@@ -80,6 +69,18 @@ static uint64_t get_rbe(void) //in: static int pe_cycle
     uint64_t rbe = dydx * (pe_cycle - pe_cycle_tbl[start_i]) + rbe_tbl[retention][start_i];
 
     return rbe;
+}
+
+static inline int cal_num_read_retry(void)
+{
+	uint64_t rbe = get_rbe();
+	int num_read_retry = 0;
+	while(!is_correctable(rbe))
+	{
+		num_read_retry += 1;
+		rbe = rbe >> 1;
+	}
+	return num_read_retry;
 }
 
 static inline unsigned int __get_io_worker(int sqid)
@@ -696,9 +697,9 @@ static int nvmev_io_worker(void *data)
 				{
 					NVMEV_INFO("%s: read retry for %d times\n", worker->thread_name, num_read_retry);
 					cfg = &nvmev_vdev->config;
-					w->nsecs_target += cfg->read_delay;
-					w->nsecs_target += cfg->read_time;
-					w->nsecs_target += cfg->read_trailing;
+					w->nsecs_target += (cfg->read_delay) * num_read_retry;
+					w->nsecs_target += (cfg->read_time) * num_read_retry;
+					w->nsecs_target += (cfg->read_trailing) * num_read_retry;
 				}
 				//JW end
 			}
